@@ -24,9 +24,11 @@ impl<'a> Maze<'a> {
             if *current_status == Exploration::UnExplored {
                 *current_status = Exploration::PartiallyExplored;
                 work.lock().unwrap().push(node.clone());
+                trace.push(*label);
                 left.explore(left.clone(), work, trace);
             } else if *current_status == Exploration::PartiallyExplored {
                 *current_status = Exploration::Explored;
+                trace.push(*label);
                 right.explore(right.clone(), work, trace);
             } else if *current_status == Exploration::Explored {
                 trace.push(*label);

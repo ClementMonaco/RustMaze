@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use std::thread;
-use std::thread::yield_now;
 
 #[derive(PartialEq, Debug)]
 enum Exploration {
@@ -21,31 +20,29 @@ enum Maze<'a> {
 impl<'a> Maze<'a> {
     fn explore(&self, node: MazeRef<'a>, work: &Arc<Mutex<Vec<MazeRef<'a>>>>, trace: &mut Vec<&'a str>, found_exit: &Arc<Mutex<bool>>) {
         if *found_exit.lock().unwrap() {
-            return; // Stop exploration if exit is already found
+            return;
         }
 
-        match self {
-            Maze::Branch(label, left, right, status) => {
-                let mut current_status = status.lock().unwrap();
-                if *current_status == Exploration::UnExplored {
-                    *current_status = Exploration::PartiallyExplored;
-                    work.lock().unwrap().push(node.clone());
-                    left.explore(left.clone(), work, trace, found_exit);
-                } else if *current_status == Exploration::PartiallyExplored {
-                    *current_status = Exploration::Explored;
-                    right.explore(right.clone(), work, trace, found_exit);
-                } else if *current_status == Exploration::Explored {
-                    trace.push(*label);
-                }
-            }
-            Maze::Leaf(label) => {
+        if let Maze::Branch(label, left, right, status) = self {
+            let mut current_status = status.lock().unwrap();
+            if *current_status == Exploration::UnExplored {
+                *current_status = Exploration::PartiallyExplored;
+                work.lock().unwrap().push(node.clone());
+                trace.push(*label);
+                left.explore(left.clone(), work, trace, found_exit);
+            } else if *current_status == Exploration::PartiallyExplored {
+                *current_status = Exploration::Explored;
+                trace.push(*label);
+                right.explore(right.clone(), work, trace, found_exit);
+            } else if *current_status == Exploration::Explored {
                 trace.push(*label);
             }
-            Maze::Exit(label) => {
-                trace.push(*label);
-                let mut exit_found = found_exit.lock().unwrap();
-                *exit_found = true; // Signal that an exit has been found
-            }
+        } else if let Maze::Leaf(label) = self {
+            trace.push(*label);
+        } else if let Maze::Exit(label) = self {
+            trace.push(*label);
+            let mut exit_found = found_exit.lock().unwrap();
+            *exit_found = true;
         }
     }
 }
@@ -89,6 +86,7 @@ pub fn main() {
                 }
             } {
                 node.explore(node.clone(), &work, &mut trace, &found_exit);
+                println!("Worker {} explored nodes: {:?}", i, trace);
                 thread::yield_now();
             }
             tx.send((i, trace)).unwrap();
@@ -98,6 +96,7 @@ pub fn main() {
 
     drop(tx);
 
+    println!("Final traces :");
     for (i, trace) in rx {
         println!("Worker {} explored nodes: {:?}", i, trace);
     }
